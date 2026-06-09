@@ -4,6 +4,7 @@ import '../services/music_service.dart';
 import '../widgets/song_tile.dart';
 import '../widgets/now_playing_bar.dart';
 import '../widgets/animated_background.dart';
+import '../widgets/song_options_sheet.dart';
 import 'now_playing_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -104,6 +105,17 @@ class _HomeScreenState extends State<HomeScreen> {
           isPlaying: _isPlaying,
           musicService: _musicService,
         ),
+      ),
+    );
+  }
+
+  void _showSongOptions(MusicTrack song) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => SongOptionsSheet(
+        song: song,
+        musicService: _musicService,
       ),
     );
   }
@@ -333,6 +345,7 @@ class _HomeScreenState extends State<HomeScreen> {
           isPlaying: isSelected && _isPlaying,
           isSelected: isSelected,
           onTap: () => _onSongTap(song),
+          onMore: () => _showSongOptions(song),
         );
       },
     );

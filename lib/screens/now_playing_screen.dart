@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/song_model.dart';
 import '../services/music_service.dart';
 import '../widgets/animated_background.dart';
+import '../widgets/song_options_sheet.dart';
 
 class NowPlayingScreen extends StatefulWidget {
   final MusicTrack song;
@@ -91,7 +92,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.more_vert, color: Color(0xFF888888)),
-            onPressed: () {},
+            onPressed: () => _showOptions(context),
             splashRadius: 20,
           ),
         ],
@@ -263,6 +264,17 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints(),
         splashRadius: 36,
+      ),
+    );
+  }
+
+  void _showOptions(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => SongOptionsSheet(
+        song: _song,
+        musicService: widget.musicService,
       ),
     );
   }

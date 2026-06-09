@@ -29,9 +29,11 @@ class MusicService {
   List<MusicTrack> _songs = [];
   MusicTrack? _currentSong;
   int _currentIndex = -1;
+  final List<MusicTrack> _queue = [];
 
   List<MusicTrack> get songs => List.unmodifiable(_songs);
   MusicTrack? get currentSong => _currentSong;
+  List<MusicTrack> get queue => List.unmodifiable(_queue);
 
   static const _audioExtensions = {
     '.mp3', '.m4a', '.wav', '.flac', '.ogg', '.aac',
@@ -188,6 +190,14 @@ class MusicService {
   }
 
   Future<void> playNext() async {
+    if (_queue.isNotEmpty) {
+      final next = _queue.removeAt(0);
+      final index = _songs.indexWhere((s) => s.id == next.id);
+      if (index != -1) {
+        await playSong(_songs[index]);
+        return;
+      }
+    }
     if (_songs.isEmpty || _currentIndex >= _songs.length - 1) return;
     await playSong(_songs[_currentIndex + 1]);
   }
@@ -195,6 +205,33 @@ class MusicService {
   Future<void> playPrevious() async {
     if (_songs.isEmpty || _currentIndex <= 0) return;
     await playSong(_songs[_currentIndex - 1]);
+  }
+
+  void addToQueue(MusicTrack song) {
+    _queue.add(song);
+  }
+
+  void playNextAfterCurrent(MusicTrack song) {
+    _queue.insert(0, song);
+  }
+
+  Future<void> deleteSong(MusicTrack song) async {
+    try {
+      final file = File(song.filePath);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (_) {}
+
+    _songs.removeWhere((s) => s.id == song.id);
+    _songsController.add(List.unmodifiable(_songs));
+
+    if (_currentSong?.id == song.id) {
+      _currentSong = null;
+      _currentIndex = -1;
+      _currentSongController.add(null);
+      await _player.stop();
+    }
   }
 
   Future<void> seek(Duration position) async {

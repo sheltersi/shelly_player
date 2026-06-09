@@ -6,6 +6,7 @@ class SongTile extends StatelessWidget {
   final bool isPlaying;
   final bool isSelected;
   final VoidCallback onTap;
+  final VoidCallback? onMore;
 
   const SongTile({
     super.key,
@@ -13,6 +14,7 @@ class SongTile extends StatelessWidget {
     required this.isPlaying,
     required this.isSelected,
     required this.onTap,
+    this.onMore,
   });
 
   @override
@@ -101,10 +103,16 @@ class SongTile extends StatelessWidget {
                     ),
                   ),
                 const SizedBox(width: 4),
-                const Icon(
-                  Icons.more_vert,
-                  color: Color(0xFF555555),
-                  size: 18,
+                IconButton(
+                  icon: const Icon(
+                    Icons.more_vert,
+                    color: Color(0xFF555555),
+                    size: 18,
+                  ),
+                  onPressed: onMore,
+                  splashRadius: 18,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 ),
               ],
             ),
