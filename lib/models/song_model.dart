@@ -3,10 +3,10 @@ class MusicTrack {
   final String title;
   final String artist;
   final String album;
-  final int duration;
+  int duration;
   final String filePath;
 
-  const MusicTrack({
+  MusicTrack({
     required this.id,
     required this.title,
     required this.artist,

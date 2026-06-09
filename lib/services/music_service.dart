@@ -68,26 +68,53 @@ class MusicService {
 
   Future<List<Directory>> _getSearchDirectories() async {
     final dirs = <Directory>[];
+    final roots = <String>{};
 
     try {
       final externalDirs = await getExternalStorageDirectories();
-
       for (final extDir in externalDirs ?? <Directory>[]) {
-        final parent = extDir.parent;
-        dirs.add(Directory('${parent.path}/Music'));
-        dirs.add(Directory('${parent.path}/Download'));
-        dirs.add(extDir);
+        var current = extDir;
+        for (int i = 0; i < 4; i++) {
+          current = current.parent;
+        }
+        roots.add(current.path);
       }
     } catch (_) {}
+
+    if (Platform.isAndroid) {
+      roots.add('/storage/emulated/0');
+    }
 
     try {
       final appDir = await getApplicationDocumentsDirectory();
       dirs.add(appDir);
     } catch (_) {}
 
-    if (Platform.isAndroid) {
-      dirs.add(Directory('/storage/emulated/0/Music'));
-      dirs.add(Directory('/storage/emulated/0/Download'));
+    for (final root in roots) {
+      dirs.add(Directory('$root/Music'));
+      dirs.add(Directory('$root/Download'));
+      dirs.add(Directory('$root/WhatsApp'));
+      dirs.add(Directory('$root/Android/media/com.whatsapp'));
+      dirs.add(Directory('$root/Telegram'));
+      dirs.add(Directory('$root/Android/media/org.telegram.messenger'));
+      dirs.add(Directory('$root/DCIM'));
+      dirs.add(Directory('$root/Movies'));
+      dirs.add(Directory('$root/Podcasts'));
+      dirs.add(Directory('$root/Audiobooks'));
+      dirs.add(Directory('$root/Recordings'));
+      dirs.add(Directory('$root/Ringtones'));
+      dirs.add(Directory('$root/Notifications'));
+      dirs.add(Directory('$root/Alarms'));
+      dirs.add(Directory('$root/Audio'));
+      dirs.add(Directory('$root/Media'));
+      dirs.add(Directory('$root/Files'));
+      dirs.add(Directory('$root/files'));
+      dirs.add(Directory('$root/Bluetooth'));
+      dirs.add(Directory('$root/SHAREit'));
+      dirs.add(Directory('$root/Xender'));
+      dirs.add(Directory('$root/VidMate'));
+      dirs.add(Directory('$root/SnapTube'));
+      dirs.add(Directory(root));
     }
 
     return dirs;
@@ -123,6 +150,7 @@ class MusicService {
     }).toList();
 
     _songsController.add(_songs);
+    _loadSongDurations();
   }
 
   Future<void> _scanDirectory(
@@ -169,6 +197,20 @@ class MusicService {
     return segments.isNotEmpty ? segments.last : 'Unknown';
   }
 
+  Future<void> _loadSongDurations() async {
+    final tempPlayer = AudioPlayer();
+    for (final song in _songs) {
+      if (song.duration > 0) continue;
+      try {
+        await tempPlayer.setFilePath(song.filePath);
+        final dur = tempPlayer.duration;
+        song.duration = dur?.inMilliseconds ?? 0;
+      } catch (_) {}
+    }
+    _songsController.add(_songs);
+    tempPlayer.dispose();
+  }
+
   Future<void> playSong(MusicTrack song) async {
     final index = _songs.indexWhere((s) => s.id == song.id);
     if (index == -1) return;
@@ -178,6 +220,15 @@ class MusicService {
     _currentSongController.add(song);
 
     await _player.setFilePath(song.filePath);
+
+    if (song.duration == 0) {
+      final dur = _player.duration;
+      if (dur != null) {
+        song.duration = dur.inMilliseconds;
+        _songsController.add(_songs);
+      }
+    }
+
     _player.play();
   }
 
