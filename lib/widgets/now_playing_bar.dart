@@ -49,6 +49,8 @@ class NowPlayingBar extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            _buildProgressBar(),
+            const SizedBox(height: 6),
             Row(
               children: [
                 Container(
@@ -153,6 +155,34 @@ class NowPlayingBar extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildProgressBar() {
+    return StreamBuilder<Duration?>(
+      stream: musicService.player.durationStream,
+      builder: (context, durationSnap) {
+        final duration = durationSnap.data ?? Duration.zero;
+        return StreamBuilder<Duration>(
+          stream: musicService.player.positionStream,
+          builder: (context, positionSnap) {
+            final position = positionSnap.data ?? Duration.zero;
+            final value = duration.inMilliseconds > 0
+                ? position.inMilliseconds / duration.inMilliseconds
+                : 0.0;
+
+            return ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: LinearProgressIndicator(
+                value: value.clamp(0.0, 1.0),
+                minHeight: 3,
+                backgroundColor: const Color(0xFF333333),
+                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFBE29EC)),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

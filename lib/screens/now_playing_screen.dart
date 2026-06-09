@@ -213,69 +213,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             ],
           ),
           const SizedBox(height: 28),
-          Container(
-            height: 4,
-            decoration: BoxDecoration(
-              color: const Color(0xFF333333),
-              borderRadius: BorderRadius.circular(2),
-            ),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return Stack(
-                  children: [
-                    Container(
-                      width: constraints.maxWidth * 0.35,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFBE29EC), Color(0xFFD896FF)],
-                        ),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    Positioned(
-                      left: constraints.maxWidth * 0.35 - 6,
-                      top: -4,
-                      child: Container(
-                        width: 12,
-                        height: 12,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFEFBBFF),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Color(0xFFBE29EC),
-                              blurRadius: 8,
-                              spreadRadius: 1,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
+          _buildProgressBar(),
           const SizedBox(height: 8),
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '1:24',
-                style: TextStyle(
-                  color: Color(0xFF888888),
-                  fontSize: 11,
-                ),
-              ),
-              Text(
-                '-2:56',
-                style: TextStyle(
-                  color: Color(0xFF888888),
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ),
+          _buildTimeLabels(),
         ],
       ),
     );
@@ -325,5 +265,75 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         splashRadius: 36,
       ),
     );
+  }
+
+  Widget _buildProgressBar() {
+    return StreamBuilder<Duration?>(
+      stream: widget.musicService.player.durationStream,
+      builder: (context, durationSnap) {
+        final duration = durationSnap.data ?? Duration.zero;
+        return StreamBuilder<Duration>(
+          stream: widget.musicService.player.positionStream,
+          builder: (context, positionSnap) {
+            final position = positionSnap.data ?? Duration.zero;
+            final progress = duration.inMilliseconds > 0
+                ? position.inMilliseconds / duration.inMilliseconds
+                : 0.0;
+
+            return Slider(
+              value: progress.clamp(0.0, 1.0),
+              onChanged: (value) {
+                final seekPosition = Duration(
+                  milliseconds: (value * duration.inMilliseconds).round(),
+                );
+                widget.musicService.seek(seekPosition);
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildTimeLabels() {
+    return StreamBuilder<Duration?>(
+      stream: widget.musicService.player.durationStream,
+      builder: (context, durationSnap) {
+        final duration = durationSnap.data ?? Duration.zero;
+        return StreamBuilder<Duration>(
+          stream: widget.musicService.player.positionStream,
+          builder: (context, positionSnap) {
+            final position = positionSnap.data ?? Duration.zero;
+            final remaining = duration > position ? duration - position : Duration.zero;
+
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _formatDuration(position),
+                  style: const TextStyle(
+                    color: Color(0xFF888888),
+                    fontSize: 11,
+                  ),
+                ),
+                Text(
+                  '-${_formatDuration(remaining)}',
+                  style: const TextStyle(
+                    color: Color(0xFF888888),
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes.abs().remainder(60).toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.abs().remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
   }
 }

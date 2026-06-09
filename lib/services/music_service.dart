@@ -13,6 +13,14 @@ class MusicService {
   final StreamController<MusicTrack?> _currentSongController =
       StreamController<MusicTrack?>.broadcast();
 
+  MusicService() {
+    _player.processingStateStream.listen((state) {
+      if (state == ProcessingState.completed) {
+        playNext();
+      }
+    });
+  }
+
   Stream<List<MusicTrack>> get songsStream => _songsController.stream;
   Stream<MusicTrack?> get currentSongStream => _currentSongController.stream;
   Stream<bool> get playingStream => _player.playingStream;
@@ -187,6 +195,10 @@ class MusicService {
   Future<void> playPrevious() async {
     if (_songs.isEmpty || _currentIndex <= 0) return;
     await playSong(_songs[_currentIndex - 1]);
+  }
+
+  Future<void> seek(Duration position) async {
+    await _player.seek(position);
   }
 
   void dispose() {
