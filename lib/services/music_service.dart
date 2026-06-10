@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/playlist_model.dart';
 import '../models/song_model.dart';
 
 class MusicService {
@@ -28,12 +30,15 @@ class MusicService {
       StreamController<Set<int>>.broadcast();
   final StreamController<List<MusicTrack>> _queueController =
       StreamController<List<MusicTrack>>.broadcast();
+  final StreamController<List<Playlist>> _playlistsController =
+      StreamController<List<Playlist>>.broadcast();
 
   Stream<List<MusicTrack>> get songsStream => _songsController.stream;
   Stream<MusicTrack?> get currentSongStream => _currentSongController.stream;
   Stream<bool> get playingStream => _player.playingStream;
   Stream<Set<int>> get favoritesStream => _favoritesController.stream;
   Stream<List<MusicTrack>> get queueStream => _queueController.stream;
+  Stream<List<Playlist>> get playlistsStream => _playlistsController.stream;
   AudioPlayer get player => _player;
 
   List<MusicTrack> _songs = [];
@@ -42,11 +47,13 @@ class MusicService {
   final List<MusicTrack> _queue = [];
   Set<int> _favorites = {};
   final Map<int, int> _playCounts = {};
+  List<Playlist> _playlists = [];
 
   List<MusicTrack> get songs => List.unmodifiable(_songs);
   MusicTrack? get currentSong => _currentSong;
   List<MusicTrack> get queue => List.unmodifiable(_queue);
   Set<int> get favorites => Set.unmodifiable(_favorites);
+  List<Playlist> get playlists => List.unmodifiable(_playlists);
 
   static const _audioExtensions = {
     '.mp3', '.m4a', '.wav', '.flac', '.ogg', '.aac',
@@ -72,6 +79,11 @@ class MusicService {
           }
         }
       }
+      final playlistsString = prefs.getString('playlists') ?? '';
+      if (playlistsString.isNotEmpty) {
+        final list = jsonDecode(playlistsString) as List;
+        _playlists = list.map((e) => Playlist.fromJson(e as Map<String, dynamic>)).toList();
+      }
     } catch (_) {}
   }
 
@@ -87,6 +99,14 @@ class MusicService {
       final prefs = await SharedPreferences.getInstance();
       final counts = _playCounts.entries.map((e) => '${e.key}:${e.value}').join(',');
       await prefs.setString('play_counts', counts);
+    } catch (_) {}
+  }
+
+  Future<void> _savePlaylists() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final json = jsonEncode(_playlists.map((p) => p.toJson()).toList());
+      await prefs.setString('playlists', json);
     } catch (_) {}
   }
 
@@ -362,6 +382,85 @@ class MusicService {
     return _songs.where((s) => _favorites.contains(s.id)).toList();
   }
 
+  Playlist createPlaylist(String name) {
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    final playlist = Playlist(
+      id: id,
+      name: name,
+      songIds: [],
+      createdAt: DateTime.now(),
+    );
+    _playlists.add(playlist);
+    _playlistsController.add(List.unmodifiable(_playlists));
+    _savePlaylists();
+    return playlist;
+  }
+
+  void deletePlaylist(String id) {
+    _playlists.removeWhere((p) => p.id == id);
+    _playlistsController.add(List.unmodifiable(_playlists));
+    _savePlaylists();
+  }
+
+  void renamePlaylist(String id, String newName) {
+    final index = _playlists.indexWhere((p) => p.id == id);
+    if (index != -1) {
+      _playlists[index].name = newName;
+      _playlistsController.add(List.unmodifiable(_playlists));
+      _savePlaylists();
+    }
+  }
+
+  void addToPlaylist(String playlistId, int songId) {
+    final index = _playlists.indexWhere((p) => p.id == playlistId);
+    if (index != -1 && !_playlists[index].songIds.contains(songId)) {
+      _playlists[index].songIds.add(songId);
+      _playlistsController.add(List.unmodifiable(_playlists));
+      _savePlaylists();
+    }
+  }
+
+  void removeFromPlaylist(String playlistId, int songId) {
+    final index = _playlists.indexWhere((p) => p.id == playlistId);
+    if (index != -1) {
+      _playlists[index].songIds.remove(songId);
+      _playlistsController.add(List.unmodifiable(_playlists));
+      _savePlaylists();
+    }
+  }
+
+  List<MusicTrack> getPlaylistSongs(String playlistId) {
+    final playlist = _playlists.firstWhere(
+      (p) => p.id == playlistId,
+      orElse: () => Playlist(id: '', name: '', songIds: [], createdAt: DateTime.now()),
+    );
+    if (playlist.id.isEmpty) return [];
+    final result = <MusicTrack>[];
+    for (final id in playlist.songIds) {
+      final index = _songs.indexWhere((s) => s.id == id);
+      if (index != -1) {
+        result.add(_songs[index]);
+      }
+    }
+    return result;
+  }
+
+  bool isInPlaylist(String playlistId, int songId) {
+    final playlist = _playlists.firstWhere(
+      (p) => p.id == playlistId,
+      orElse: () => Playlist(id: '', name: '', songIds: [], createdAt: DateTime.now()),
+    );
+    return playlist.songIds.contains(songId);
+  }
+
+  Playlist? getPlaylist(String id) {
+    try {
+      return _playlists.firstWhere((p) => p.id == id);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> deleteSong(MusicTrack song) async {
     try {
       final file = File(song.filePath);
@@ -394,6 +493,7 @@ class MusicService {
     _currentSongController.close();
     _favoritesController.close();
     _queueController.close();
+    _playlistsController.close();
     _player.dispose();
   }
 }

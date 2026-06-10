@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
+import '../models/playlist_model.dart';
 import '../models/song_model.dart';
 import '../services/music_service.dart';
 
@@ -129,6 +130,11 @@ class _SongOptionsSheetState extends State<SongOptionsSheet> {
               },
             ),
             _buildOption(
+              icon: Icons.playlist_add,
+              label: 'Add to Playlist',
+              onTap: () => _showPlaylistPicker(context),
+            ),
+            _buildOption(
               icon: Icons.share,
               label: 'Share',
               onTap: () => _share(context),
@@ -203,6 +209,18 @@ class _SongOptionsSheetState extends State<SongOptionsSheet> {
     if (context.mounted) {
       Navigator.pop(context);
     }
+  }
+
+  void _showPlaylistPicker(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        return _PlaylistPickerDialog(
+          song: widget.song,
+          musicService: widget.musicService,
+        );
+      },
+    );
   }
 
   void _showSongInfo(BuildContext context) {
@@ -299,5 +317,166 @@ class _SongOptionsSheetState extends State<SongOptionsSheet> {
     final minutes = Duration(milliseconds: ms).inMinutes.remainder(60).toString().padLeft(2, '0');
     final seconds = Duration(milliseconds: ms).inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
+  }
+}
+
+class _PlaylistPickerDialog extends StatelessWidget {
+  final MusicTrack song;
+  final MusicService musicService;
+
+  const _PlaylistPickerDialog({
+    required this.song,
+    required this.musicService,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFF141414),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text(
+        'Add to Playlist',
+        style: TextStyle(color: Color(0xFFEFBBFF)),
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: StreamBuilder<List<Playlist>>(
+          stream: musicService.playlistsStream,
+          initialData: musicService.playlists,
+          builder: (context, snapshot) {
+            final playlists = snapshot.data ?? [];
+            if (playlists.isEmpty) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Text(
+                  'No playlists yet. Create one below.',
+                  style: TextStyle(color: Color(0xFF888888)),
+                  textAlign: TextAlign.center,
+                ),
+              );
+            }
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: playlists.map((playlist) {
+                final isInPlaylist =
+                    playlist.songIds.contains(song.id);
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFBE29EC), Color(0xFF800080)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      isInPlaylist ? Icons.check : Icons.playlist_play,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  title: Text(
+                    playlist.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '${playlist.songCount} ${playlist.songCount == 1 ? 'song' : 'songs'}',
+                    style: const TextStyle(color: Color(0xFF888888), fontSize: 12),
+                  ),
+                  trailing: Icon(
+                    isInPlaylist ? Icons.remove_circle_outline : Icons.add_circle_outline,
+                    color: isInPlaylist ? Colors.redAccent : const Color(0xFFD896FF),
+                  ),
+                  onTap: () {
+                    if (isInPlaylist) {
+                      musicService.removeFromPlaylist(playlist.id, song.id);
+                    } else {
+                      musicService.addToPlaylist(playlist.id, song.id);
+                    }
+                  },
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            _showCreatePlaylistDialog(context);
+          },
+          child: const Text(
+            'Create New',
+            style: TextStyle(color: Color(0xFFD896FF)),
+          ),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text(
+            'Done',
+            style: TextStyle(color: Color(0xFF888888)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showCreatePlaylistDialog(BuildContext context) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF141414),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'New Playlist',
+          style: TextStyle(color: Color(0xFFEFBBFF)),
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: 'Playlist name',
+            hintStyle: const TextStyle(color: Color(0xFF888888)),
+            filled: true,
+            fillColor: const Color(0xFF1A1A1A),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFFBE29EC)),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF888888))),
+          ),
+          TextButton(
+            onPressed: () {
+              final name = controller.text.trim();
+              if (name.isNotEmpty) {
+                final playlist = musicService.createPlaylist(name);
+                musicService.addToPlaylist(playlist.id, song.id);
+                Navigator.pop(dialogCtx);
+              }
+            },
+            child: const Text('Create', style: TextStyle(color: Color(0xFFD896FF))),
+          ),
+        ],
+      ),
+    );
   }
 }
