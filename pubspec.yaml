@@ -13,6 +13,7 @@ dependencies:
   permission_handler: ^11.4.0
   path_provider: ^2.1.5
   share_plus: ^10.0.0
+  shared_preferences: ^2.5.0
 
 dev_dependencies:
   flutter_test:

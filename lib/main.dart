@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'screens/home_screen.dart';
+import 'screens/main_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -118,7 +118,7 @@ class MusicApp extends StatelessWidget {
           thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
         ),
       ),
-      home: const HomeScreen(),
+      home: const MainScreen(),
     );
   }
 }

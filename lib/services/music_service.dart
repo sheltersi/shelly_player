@@ -3,37 +3,50 @@ import 'dart:io';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/song_model.dart';
 
 class MusicService {
+  static final MusicService _instance = MusicService._internal();
+  factory MusicService() => _instance;
+  MusicService._internal() {
+    _player.processingStateStream.listen((state) {
+      if (state == ProcessingState.completed) {
+        playNext();
+      }
+    });
+    _initPersistence();
+  }
+
   final AudioPlayer _player = AudioPlayer();
 
   final StreamController<List<MusicTrack>> _songsController =
       StreamController<List<MusicTrack>>.broadcast();
   final StreamController<MusicTrack?> _currentSongController =
       StreamController<MusicTrack?>.broadcast();
-
-  MusicService() {
-    _player.processingStateStream.listen((state) {
-      if (state == ProcessingState.completed) {
-        playNext();
-      }
-    });
-  }
+  final StreamController<Set<int>> _favoritesController =
+      StreamController<Set<int>>.broadcast();
+  final StreamController<List<MusicTrack>> _queueController =
+      StreamController<List<MusicTrack>>.broadcast();
 
   Stream<List<MusicTrack>> get songsStream => _songsController.stream;
   Stream<MusicTrack?> get currentSongStream => _currentSongController.stream;
   Stream<bool> get playingStream => _player.playingStream;
+  Stream<Set<int>> get favoritesStream => _favoritesController.stream;
+  Stream<List<MusicTrack>> get queueStream => _queueController.stream;
   AudioPlayer get player => _player;
 
   List<MusicTrack> _songs = [];
   MusicTrack? _currentSong;
   int _currentIndex = -1;
   final List<MusicTrack> _queue = [];
+  Set<int> _favorites = {};
+  final Map<int, int> _playCounts = {};
 
   List<MusicTrack> get songs => List.unmodifiable(_songs);
   MusicTrack? get currentSong => _currentSong;
   List<MusicTrack> get queue => List.unmodifiable(_queue);
+  Set<int> get favorites => Set.unmodifiable(_favorites);
 
   static const _audioExtensions = {
     '.mp3', '.m4a', '.wav', '.flac', '.ogg', '.aac',
@@ -42,6 +55,40 @@ class MusicService {
 
   static const _maxScanDepth = 4;
   static const _maxFiles = 5000;
+
+  Future<void> _initPersistence() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final favString = prefs.getString('favorites') ?? '';
+      if (favString.isNotEmpty) {
+        _favorites = favString.split(',').map(int.parse).toSet();
+      }
+      final countString = prefs.getString('play_counts') ?? '';
+      if (countString.isNotEmpty) {
+        for (final entry in countString.split(',')) {
+          final parts = entry.split(':');
+          if (parts.length == 2) {
+            _playCounts[int.parse(parts[0])] = int.parse(parts[1]);
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveFavorites() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('favorites', _favorites.join(','));
+    } catch (_) {}
+  }
+
+  Future<void> _savePlayCounts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final counts = _playCounts.entries.map((e) => '${e.key}:${e.value}').join(',');
+      await prefs.setString('play_counts', counts);
+    } catch (_) {}
+  }
 
   Future<bool> requestPermission() async {
     Permission permission;
@@ -219,6 +266,8 @@ class MusicService {
     _currentIndex = index;
     _currentSongController.add(song);
 
+    _incrementPlayCount(song.id);
+
     await _player.setFilePath(song.filePath);
 
     if (song.duration == 0) {
@@ -243,6 +292,7 @@ class MusicService {
   Future<void> playNext() async {
     if (_queue.isNotEmpty) {
       final next = _queue.removeAt(0);
+      _queueController.add(_queue);
       final index = _songs.indexWhere((s) => s.id == next.id);
       if (index != -1) {
         await playSong(_songs[index]);
@@ -260,10 +310,56 @@ class MusicService {
 
   void addToQueue(MusicTrack song) {
     _queue.add(song);
+    _queueController.add(_queue);
   }
 
   void playNextAfterCurrent(MusicTrack song) {
     _queue.insert(0, song);
+    _queueController.add(_queue);
+  }
+
+  void removeFromQueue(int index) {
+    if (index >= 0 && index < _queue.length) {
+      _queue.removeAt(index);
+      _queueController.add(_queue);
+    }
+  }
+
+  void clearQueue() {
+    _queue.clear();
+    _queueController.add(_queue);
+  }
+
+  void toggleFavorite(int songId) {
+    if (_favorites.contains(songId)) {
+      _favorites.remove(songId);
+    } else {
+      _favorites.add(songId);
+    }
+    _favoritesController.add(Set.unmodifiable(_favorites));
+    _saveFavorites();
+  }
+
+  bool isFavorite(int songId) => _favorites.contains(songId);
+
+  void _incrementPlayCount(int songId) {
+    _playCounts[songId] = (_playCounts[songId] ?? 0) + 1;
+    _savePlayCounts();
+  }
+
+  List<MusicTrack> getMostPlayed({int limit = 50}) {
+    if (_songs.isEmpty) return [];
+    final sorted = List<MusicTrack>.from(_songs);
+    sorted.sort((a, b) {
+      final countA = _playCounts[a.id] ?? 0;
+      final countB = _playCounts[b.id] ?? 0;
+      return countB.compareTo(countA);
+    });
+    return sorted.take(limit).toList();
+  }
+
+  List<MusicTrack> getFavoriteSongs() {
+    return _songs.where((s) => _favorites.contains(s.id)).toList();
   }
 
   Future<void> deleteSong(MusicTrack song) async {
@@ -283,6 +379,10 @@ class MusicService {
       _currentSongController.add(null);
       await _player.stop();
     }
+
+    _favorites.remove(song.id);
+    _favoritesController.add(Set.unmodifiable(_favorites));
+    _saveFavorites();
   }
 
   Future<void> seek(Duration position) async {
@@ -292,6 +392,8 @@ class MusicService {
   void dispose() {
     _songsController.close();
     _currentSongController.close();
+    _favoritesController.close();
+    _queueController.close();
     _player.dispose();
   }
 }

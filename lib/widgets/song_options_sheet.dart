@@ -4,7 +4,7 @@ import 'package:share_plus/share_plus.dart';
 import '../models/song_model.dart';
 import '../services/music_service.dart';
 
-class SongOptionsSheet extends StatelessWidget {
+class SongOptionsSheet extends StatefulWidget {
   final MusicTrack song;
   final MusicService musicService;
 
@@ -13,6 +13,24 @@ class SongOptionsSheet extends StatelessWidget {
     required this.song,
     required this.musicService,
   });
+
+  @override
+  State<SongOptionsSheet> createState() => _SongOptionsSheetState();
+}
+
+class _SongOptionsSheetState extends State<SongOptionsSheet> {
+  bool _isFavorite = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isFavorite = widget.musicService.isFavorite(widget.song.id);
+    widget.musicService.favoritesStream.listen((favs) {
+      if (mounted) {
+        setState(() => _isFavorite = favs.contains(widget.song.id));
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +76,7 @@ class SongOptionsSheet extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          song.title,
+                          widget.song.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -69,7 +87,7 @@ class SongOptionsSheet extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${song.artist} \u2022 ${song.album}',
+                          '${widget.song.artist} \u2022 ${widget.song.album}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -86,10 +104,19 @@ class SongOptionsSheet extends StatelessWidget {
             const SizedBox(height: 16),
             const Divider(color: Color(0xFF222222), height: 1),
             _buildOption(
+              icon: _isFavorite ? Icons.favorite : Icons.favorite_border,
+              label: _isFavorite ? 'Remove from Favorites' : 'Add to Favorites',
+              color: _isFavorite ? Colors.redAccent : const Color(0xFFD896FF),
+              onTap: () {
+                widget.musicService.toggleFavorite(widget.song.id);
+                Navigator.pop(context);
+              },
+            ),
+            _buildOption(
               icon: Icons.play_arrow,
               label: 'Play Next',
               onTap: () {
-                musicService.playNextAfterCurrent(song);
+                widget.musicService.playNextAfterCurrent(widget.song);
                 Navigator.pop(context);
               },
             ),
@@ -97,7 +124,7 @@ class SongOptionsSheet extends StatelessWidget {
               icon: Icons.queue_music,
               label: 'Add to Queue',
               onTap: () {
-                musicService.addToQueue(song);
+                widget.musicService.addToQueue(widget.song);
                 Navigator.pop(context);
               },
             ),
@@ -146,7 +173,7 @@ class SongOptionsSheet extends StatelessWidget {
   }
 
   Future<void> _share(BuildContext context) async {
-    final file = File(song.filePath);
+    final file = File(widget.song.filePath);
     if (!await file.exists()) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -160,7 +187,7 @@ class SongOptionsSheet extends StatelessWidget {
       return;
     }
     try {
-      await Share.shareXFiles([XFile(song.filePath)], text: song.title);
+      await Share.shareXFiles([XFile(widget.song.filePath)], text: widget.song.title);
     } catch (_) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -192,11 +219,11 @@ class SongOptionsSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _infoRow('Title', song.title),
-            _infoRow('Artist', song.artist),
-            _infoRow('Album', song.album),
-            _infoRow('Duration', _formatMillis(song.duration)),
-            _infoRow('File', song.filePath),
+            _infoRow('Title', widget.song.title),
+            _infoRow('Artist', widget.song.artist),
+            _infoRow('Album', widget.song.album),
+            _infoRow('Duration', _formatMillis(widget.song.duration)),
+            _infoRow('File', widget.song.filePath),
           ],
         ),
         actions: [
@@ -243,7 +270,7 @@ class SongOptionsSheet extends StatelessWidget {
           style: TextStyle(color: Color(0xFFEFBBFF)),
         ),
         content: Text(
-          'Are you sure you want to delete "${song.title}"? This cannot be undone.',
+          'Are you sure you want to delete "${widget.song.title}"? This cannot be undone.',
           style: const TextStyle(color: Colors.white70),
         ),
         actions: [
@@ -254,7 +281,7 @@ class SongOptionsSheet extends StatelessWidget {
           TextButton(
             onPressed: () async {
               Navigator.pop(dialogCtx);
-              await musicService.deleteSong(song);
+              await widget.musicService.deleteSong(widget.song);
               if (context.mounted) Navigator.pop(context);
             },
             child: const Text(

@@ -3,6 +3,7 @@ import '../models/song_model.dart';
 import '../services/music_service.dart';
 import '../widgets/animated_background.dart';
 import '../widgets/song_options_sheet.dart';
+import '../widgets/queue_sheet.dart';
 
 class NowPlayingScreen extends StatefulWidget {
   final MusicTrack song;
@@ -89,6 +90,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                 letterSpacing: 0.5,
               ),
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.queue_music, color: Color(0xFF888888)),
+            onPressed: () => _showQueue(context),
+            splashRadius: 20,
           ),
           IconButton(
             icon: const Icon(Icons.more_vert, color: Color(0xFF888888)),
@@ -274,6 +280,17 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => SongOptionsSheet(
         song: _song,
+        musicService: widget.musicService,
+      ),
+    );
+  }
+
+  void _showQueue(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => QueueSheet(
         musicService: widget.musicService,
       ),
     );
